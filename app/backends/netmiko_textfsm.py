@@ -28,18 +28,25 @@ def _connect(router):
 
 def _read(connection, interface_name):
     """Run the two read-only commands and return parsed (ip_info, descriptions)."""
-    ip_info = connection.send_command(
-        f"show ip interface {interface_name}", use_textfsm=True
-    )
+    command = f"show ip interface {interface_name}"
+
+    # For a missing interface IOS prints a caret line followed by
+    # "% Invalid input detected at '^' marker." which TextFSM cannot parse
+    # (it raises). Look at the raw text first: that error simply means
+    # "interface not found".
+    raw = connection.send_command(command)
+    if "invalid input detected" in raw.lower():
+        return [], []
+    if any(line.lstrip().startswith("%") for line in raw.splitlines()):
+        raise RuntimeError(f"unexpected IOS reply: {raw.strip()}")
+
+    ip_info = connection.send_command(command, use_textfsm=True)
     descriptions = connection.send_command(
         "show interfaces description", use_textfsm=True
     )
 
-    # Netmiko returns the raw text when TextFSM cannot parse it. For a missing
-    # interface IOS prints an error, which simply means "not found".
+    # Netmiko returns the raw text when no template matches.
     if isinstance(ip_info, str):
-        if "invalid" in ip_info.lower():
-            return [], []
         raise RuntimeError("could not parse 'show ip interface'")
     if isinstance(descriptions, str):
         raise RuntimeError("could not parse 'show interfaces description'")

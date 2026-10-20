@@ -1,5 +1,8 @@
 """Shared helpers for the Part 3 backends (no router logic here)."""
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 
 def error_response(code):
@@ -70,4 +73,7 @@ def classify_exception(exc):
 
 
 def exception_response(exc):
-    return error_response(classify_exception(exc))
+    code = classify_exception(exc)
+    # Log the real cause (the JSON reply only carries the generic code).
+    logger.warning("backend error -> %s: %r", code, exc, exc_info=exc)
+    return error_response(code)
